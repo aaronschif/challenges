@@ -1,14 +1,15 @@
 use std::io;
 use std::io::prelude::*;
-use std::cmp::max;
+use std::cmp::*;
 use std::fmt;
+use std::collections::BinaryHeap;
 
 struct Wave {
     start: u32,
     wait: u32,
     fun: u32,
-    max_fun_do: u32,
-    max_fun_dont: u32,
+    max_fun_do: Option<u32>,
+    ord: u32,
 }
 
 impl Wave {
@@ -17,8 +18,8 @@ impl Wave {
             start: start,
             wait: wait,
             fun: fun,
-            max_fun_do: fun,
-            max_fun_dont: fun,
+            max_fun_do: None,
+            ord: start,
         }
     }
 
@@ -29,8 +30,28 @@ impl Wave {
 
 impl fmt::Debug for Wave {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Wave {{ start: {}, max_fun: {}, otherfun: {} }}", self.start, self.max_fun_do, self.max_fun_dont)
+        write!(f, "\n  Wave {{ start: {}, max_fun: {:?}, fun: {}, ord: {} }}", self.start, self.max_fun_do, self.fun, self.ord)
     }
+}
+
+impl PartialEq for Wave {
+    fn eq(&self, other: &Self) -> bool { self.ord == other.ord }
+}
+
+impl PartialOrd for Wave {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if other.ord == self.ord {
+            other.start.partial_cmp(&self.start)
+        } else {
+            other.ord.partial_cmp(&self.ord)
+        }
+    }
+}
+
+impl Eq for Wave {}
+
+impl Ord for Wave {
+    fn cmp(&self, other: &Self) -> Ordering {self.ord.cmp(&other.ord)}
 }
 
 fn readall() -> Vec<Wave> {
@@ -50,24 +71,26 @@ fn readall() -> Vec<Wave> {
 }
 
 fn main() {
-    let mut waves = readall();
-    waves.sort_by_key(|e| e.end());
+    let mut waves = {
+        let mut r = BinaryHeap::new();
+        r.extend(readall());
+        r
+    };
 
-    let mut total_max_fun = 0;
+    let mut total_fun = 0;
 
-    for n in 0..waves.len() {
-        for i in (0..n).rev() {
-            if waves[i].end() <= waves[n].start {
-                waves[n].max_fun_do = max(waves[n].max_fun_do, waves[i].max_fun_dont + waves[n].fun);
-                break;
+    while !waves.is_empty() {
+        let mut wave = waves.pop().unwrap();
+        match wave.max_fun_do {
+            None => {
+                wave.max_fun_do = Some(total_fun);
+                wave.ord = wave.end();
+                waves.push(wave);
+            }
+            Some(fun) => {
+                total_fun = max(total_fun, fun + wave.fun);
             }
         }
-
-        total_max_fun = max(total_max_fun, waves[n].max_fun_dont);
-        total_max_fun = max(total_max_fun, waves[n].max_fun_do);
-        waves[n].max_fun_dont = total_max_fun;
-        // println!("{:?}", waves);
     }
-    println!("{}", total_max_fun);
-    // println!("{}", waves.last().map_or(0, |x| x.max_fun_dont));
+    println!("{}", total_fun);
 }
