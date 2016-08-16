@@ -5,11 +5,12 @@ from pathlib import Path
 from subprocess import Popen, PIPE, TimeoutExpired
 from time import time
 from enum import Enum
+from difflib import Differ, context_diff
 import re
 
 parser = argparse.ArgumentParser()
-parser.add_argument('cmd')
 parser.add_argument('path')
+parser.add_argument('cmd')
 parser.add_argument('limit', nargs='*', type=int)
 parser.add_argument('--timeout', nargs='?', default=5, type=float)
 parser.add_argument('--size', nargs='?', default=0, type=float)
@@ -51,7 +52,11 @@ def run_test(in_path, expect_path) -> (Result, "time", "diff"):
 
     correct_output = test_path.read_bytes()
     if our_output != correct_output:
-         return Result.DIFFRENT, total_time, None
+        diff = context_diff(
+            correct_output.decode('utf-8').splitlines(keepends=True),
+            our_output.decode('utf-8').splitlines(keepends=True),
+            tofile='have stdout', fromfile='correct stdout')
+        return Result.DIFFRENT, total_time, diff
 
     return Result.SUCCESS, total_time, None
 
@@ -60,7 +65,6 @@ try:
     for n, path in enumerate(Path(args.path).glob('*.in')):
         test_path = path.with_suffix('.out')
         assert test_path.exists()
-
 
         if args.limit and n not in args.limit:
             result, total_time, diff = Result.SKIP, 0, None
@@ -76,6 +80,9 @@ try:
         fmt_stdin_size = path.stat().st_size/1024
 
         print("{:4}: {} {:8} {:>20} [{:6.0f}k]   {:6.2f}s".format(n, fmt_icon, result.name, path.name, fmt_stdin_size, total_time))
+        if diff:
+            for line in diff:
+                print(" "*8, line.rstrip('\n'))
         # if not correct and outs:
 except KeyboardInterrupt:
     pass
